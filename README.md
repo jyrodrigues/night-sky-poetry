@@ -36,6 +36,7 @@ npm run build
 - React
 - TypeScript
 - Vite
+- Tailwind CSS
 
 ## License
 
