@@ -2,6 +2,8 @@
 
 A web application that converts text into beautiful images using a special formula.
 
+Inspired by: https://www.c82.net/work/?id=357
+
 ## Getting Started
 
 ### Prerequisites
