@@ -49,6 +49,13 @@ export function generateConstellationFromSentence(
   const stars: Star[] = []
   const connections: Connection[] = []
   
+  // Walking path algorithm - start at constellation center
+  let currentX = area.centerX
+  let currentY = area.centerY
+  
+  // Edge length multiplier - can be tuned later (smaller values keep paths more contained)
+  const EDGE_LENGTH_MULTIPLIER = 1.5
+  
   words.forEach((word, index) => {
     if (word.trim().length === 0) return
     
@@ -56,39 +63,63 @@ export function generateConstellationFromSentence(
     const term = terms.eq(index)
     const pos = classifyPartOfSpeech(term)
     
-    // Calculate position based on POS angle and word position in sentence
-    const posAngle = POS_ANGLES[pos] || POS_ANGLES.Unknown
-    const baseAngle = (posAngle + (index * 15)) * (Math.PI / 180) // Convert to radians, add slight offset per word
-    
-    // Distance from center based on word length and sentence position
-    const wordLength = word.length
-    const distance = Math.min(area.radius * 0.3, (wordLength * 3) + (index * 2))
-    
-    // Calculate position within the constellation area
-    const x = area.centerX + distance * Math.cos(baseAngle)
-    const y = area.centerY + distance * Math.sin(baseAngle)
-    
-    // Size based on word length (following Rougeux's approach)
-    let size: 'large' | 'medium' | 'small' | 'tiny'
-    if (wordLength > 8) size = 'large'
-    else if (wordLength > 5) size = 'medium'
-    else if (wordLength > 3) size = 'small'
-    else size = 'tiny'
-    
-    stars.push({
-      x: Math.max(5, Math.min(95, x)), // Keep within bounds
-      y: Math.max(5, Math.min(95, y)),
-      size,
-      color: POS_COLORS[pos] || POS_COLORS.Unknown,
-      paragraphIndex,
-      roman: index === 0 ? toRoman(paragraphIndex + 1) : undefined, // First word gets Roman numeral
-      partOfSpeech: pos,
-      shape: POS_SHAPES[pos] || 'circle',
-      word: word.toLowerCase().replace(/[^a-zA-Z]/g, '') // Store clean word for debugging
-    })
-    
-    // Connect adjacent words in the sentence (following text flow)
-    if (index > 0) {
+    // For the first word, place it at the starting position
+    if (index === 0) {
+      // Size based on word length (following Rougeux's approach)
+      const wordLength = word.length
+      let size: 'large' | 'medium' | 'small' | 'tiny'
+      if (wordLength > 8) size = 'large'
+      else if (wordLength > 5) size = 'medium'
+      else if (wordLength > 3) size = 'small'
+      else size = 'tiny'
+      
+      stars.push({
+        x: Math.max(10, Math.min(90, currentX)),
+        y: Math.max(10, Math.min(90, currentY)),
+        size,
+        color: POS_COLORS[pos] || POS_COLORS.Unknown,
+        paragraphIndex,
+        roman: toRoman(paragraphIndex + 1), // First word gets Roman numeral
+        partOfSpeech: pos,
+        shape: POS_SHAPES[pos] || 'circle',
+        word: word.toLowerCase().replace(/[^a-zA-Z]/g, '')
+      })
+    } else {
+      // Walking algorithm: direction determined by POS, distance by word length
+      const posAngle = POS_ANGLES[pos] || POS_ANGLES.Unknown
+      const angleInRadians = posAngle * (Math.PI / 180)
+      
+      // Distance to walk = word length * multiplier
+      const wordLength = word.length
+      const walkDistance = wordLength * EDGE_LENGTH_MULTIPLIER
+      
+      // Calculate new position by walking in the POS direction
+      const deltaX = walkDistance * Math.cos(angleInRadians)
+      const deltaY = walkDistance * Math.sin(angleInRadians)
+      
+      currentX += deltaX
+      currentY += deltaY
+      
+      // Size based on word length
+      let size: 'large' | 'medium' | 'small' | 'tiny'
+      if (wordLength > 8) size = 'large'
+      else if (wordLength > 5) size = 'medium'
+      else if (wordLength > 3) size = 'small'
+      else size = 'tiny'
+      
+      stars.push({
+        x: Math.max(10, Math.min(90, currentX)),
+        y: Math.max(10, Math.min(90, currentY)),
+        size,
+        color: POS_COLORS[pos] || POS_COLORS.Unknown,
+        paragraphIndex,
+        roman: undefined, // Only first word gets Roman numeral
+        partOfSpeech: pos,
+        shape: POS_SHAPES[pos] || 'circle',
+        word: word.toLowerCase().replace(/[^a-zA-Z]/g, '')
+      })
+      
+      // Connect to previous word (creating the walking path)
       connections.push({
         from: globalStarOffset + index - 1,
         to: globalStarOffset + index,
