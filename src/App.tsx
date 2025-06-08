@@ -1,4 +1,163 @@
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
+
+// Utility functions for constellation generation
+function generateNightSkyFromText(text: string): NightSkyData {
+  const paragraphs = text.split('\n\n').filter(p => p.trim().length > 0)
+  
+  const allStars: Star[] = []
+  const allConnections: Connection[] = []
+  const colors = ['#ffffff', '#e0e7ff', '#fef3c7', '#fecaca', '#d1fae5', '#e0e7ff']
+  
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    const words = paragraph.split(/\s+/).filter(w => w.length > 0)
+    
+    // Define area for this constellation within the circle
+    const constellationArea = getConstellationArea(paragraphIndex, paragraphs.length)
+    
+    // Generate stars for this constellation within its area
+    const constellationStars = generateStarsInArea(words, constellationArea, paragraphIndex, colors[paragraphIndex % colors.length])
+    
+    // Generate connections within this constellation
+    const constellationConnections = generateConnectionsForConstellation(
+      constellationStars,
+      allStars.length, // offset for global star indices
+      paragraphIndex
+    )
+    
+    allStars.push(...constellationStars)
+    allConnections.push(...constellationConnections)
+  })
+  
+  // Add some random decorative stars throughout the sky
+  const decorativeStars = generateDecorativeStars(paragraphs.length * 10)
+  allStars.push(...decorativeStars)
+  
+  return {
+    stars: allStars,
+    connections: allConnections,
+    paragraphs: paragraphs.map(p => p.trim())
+  }
+}
+
+function getConstellationArea(index: number, total: number) {
+  // Divide the circle into areas for each constellation
+  if (total === 1) {
+    return { centerX: 50, centerY: 50, radius: 40 }
+  } else if (total === 2) {
+    return index === 0 
+      ? { centerX: 35, centerY: 50, radius: 25 }
+      : { centerX: 65, centerY: 50, radius: 25 }
+  } else if (total === 3) {
+    const centers = [
+      { centerX: 50, centerY: 30, radius: 20 },
+      { centerX: 35, centerY: 65, radius: 20 },
+      { centerX: 65, centerY: 65, radius: 20 }
+    ]
+    return centers[index] || centers[0]
+  } else {
+    // For more constellations, arrange in a grid-like pattern
+    const angle = (index / total) * 2 * Math.PI
+    const radius = 25
+    const centerX = 50 + radius * Math.cos(angle)
+    const centerY = 50 + radius * Math.sin(angle)
+    return { centerX, centerY, radius: 15 }
+  }
+}
+
+function generateStarsInArea(words: string[], area: {centerX: number, centerY: number, radius: number}, paragraphIndex: number, color: string): Star[] {
+  const stars: Star[] = []
+  
+  words.forEach((word, index) => {
+    // Position stars within the allocated area
+    const angle = (index / words.length) * 2 * Math.PI + (Math.random() - 0.5) * 1
+    const radius = Math.random() * area.radius
+    
+    const x = area.centerX + radius * Math.cos(angle)
+    const y = area.centerY + radius * Math.sin(angle)
+    
+    // Size based on word length
+    let size: 'large' | 'medium' | 'small' | 'tiny'
+    if (word.length > 8) size = 'large'
+    else if (word.length > 5) size = 'medium'
+    else if (word.length > 3) size = 'small'
+    else size = 'tiny'
+    
+    stars.push({
+      x: Math.max(5, Math.min(95, x)), // Keep within bounds
+      y: Math.max(5, Math.min(95, y)),
+      size,
+      roman: index < 10 ? toRoman(index + 1) : undefined, // First 10 words get Roman numerals
+      paragraphIndex,
+      color
+    })
+  })
+  
+  return stars
+}
+
+function generateConnectionsForConstellation(stars: Star[], offset: number, paragraphIndex: number): Connection[] {
+  const connections: Connection[] = []
+  const maxConnections = Math.min(5, Math.floor(stars.length / 2))
+  
+  for (let i = 0; i < maxConnections; i++) {
+    const from = Math.floor(Math.random() * stars.length)
+    let to = Math.floor(Math.random() * stars.length)
+    
+    // Avoid self-connections and duplicates
+    while (to === from || connections.some(c => 
+      (c.from === from + offset && c.to === to + offset) || 
+      (c.from === to + offset && c.to === from + offset)
+    )) {
+      to = Math.floor(Math.random() * stars.length)
+    }
+    
+    // Only connect if stars are reasonably close
+    const distance = Math.sqrt(
+      Math.pow(stars[from].x - stars[to].x, 2) + 
+      Math.pow(stars[from].y - stars[to].y, 2)
+    )
+    
+    if (distance < 25) { // Reduced distance threshold for smaller areas
+      connections.push({ 
+        from: from + offset, 
+        to: to + offset,
+        paragraphIndex
+      })
+    }
+  }
+  
+  return connections
+}
+
+function generateDecorativeStars(count: number): Star[] {
+  const stars: Star[] = []
+  
+  for (let i = 0; i < count; i++) {
+    stars.push({
+      x: Math.random() * 90 + 5,
+      y: Math.random() * 90 + 5,
+      size: 'tiny',
+      color: '#ffffff'
+    })
+  }
+  
+  return stars
+}
+
+
+function toRoman(num: number): string {
+  const values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+  const numerals = ['M', 'CM', 'D', 'CD', 'C', 'XC', 'L', 'XL', 'X', 'IX', 'V', 'IV', 'I']
+  
+  let result = ''
+  for (let i = 0; i < values.length; i++) {
+    while (num >= values[i]) {
+      result += numerals[i]
+      num -= values[i]
+    }
+  }
+  return result
+}
 
 // Star data for constellation - positions in percentages relative to circle
 const starData = [
@@ -139,21 +298,84 @@ const textContent = [
   "XIX. Never had such joy reigned in the nursery of the Large Family."
 ]
 
-function Constellation() {
+function InputForm({ inputText, setInputText, onGenerate }: {
+  inputText: string
+  setInputText: (text: string) => void
+  onGenerate: () => void
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[80vh]">
+      {/* Title */}
+      <div className="text-center mb-8">
+        <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif mb-4 tracking-wide">
+          Night Sky Poetry
+        </h1>
+        <p className="text-lg md:text-xl text-gray-300 font-light">
+          Transform your text into constellations
+        </p>
+      </div>
+      
+      {/* Input form */}
+      <div className="w-full max-w-2xl">
+        <textarea
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder="Enter your text here..."
+          className="w-full h-64 p-6 bg-gray-800 bg-opacity-50 border border-gray-600 rounded-lg text-white placeholder-gray-400 resize-none focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors"
+        />
+        
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={onGenerate}
+            disabled={!inputText.trim()}
+            className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-blue-950"
+          >
+            Generate
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GeneratingView() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[80vh]">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mb-6 mx-auto"></div>
+        <h2 className="text-2xl md:text-3xl font-serif mb-2">Generating Constellations</h2>
+        <p className="text-gray-300">Mapping your words to the stars...</p>
+      </div>
+    </div>
+  )
+}
+
+function NightSky({ data, size = 'large' }: { 
+  data?: NightSkyData
+  size?: 'small' | 'medium' | 'large' 
+}) {
+  // Use provided data or fallback to static data
+  const stars = data?.stars || starData
+  const connections = data?.connections || []
+  
   const circleSize = useMemo(() => {
-    // Responsive circle size based on screen size
+    // Responsive circle size based on screen size and size prop
     if (typeof window !== 'undefined') {
       const vmin = Math.min(window.innerWidth, window.innerHeight)
-      if (window.innerWidth < 768) {
-        return Math.min(vmin * 0.8, 350) // Mobile
-      } else if (window.innerWidth < 1024) {
-        return Math.min(vmin * 0.6, 450) // Tablet
-      } else {
-        return Math.min(vmin * 0.5, 500) // Desktop
+      let baseSize
+      
+      if (size === 'small') {
+        baseSize = window.innerWidth < 768 ? 250 : 300
+      } else if (size === 'large') {
+        baseSize = window.innerWidth < 768 ? 350 : window.innerWidth < 1024 ? 450 : 500
+      } else { // medium
+        baseSize = window.innerWidth < 768 ? 300 : window.innerWidth < 1024 ? 400 : 450
       }
+      
+      return Math.min(vmin * 0.8, baseSize)
     }
-    return 500
-  }, [])
+    return size === 'small' ? 300 : size === 'large' ? 500 : 450
+  }, [size])
 
   return (
     <div className="relative" style={{ width: circleSize, height: circleSize }}>
@@ -175,23 +397,32 @@ function Constellation() {
           strokeDasharray="5,3"
         />
         
-        {/* Connection lines between some stars */}
+        {/* Connection lines between stars */}
         <g stroke="rgba(255, 255, 255, 0.2)" strokeWidth="0.5" fill="none">
-          {/* Sample constellation lines */}
-          <line x1={(50/100) * (circleSize - 80) + 40} y1={(15/100) * (circleSize - 80) + 40} 
-                x2={(75/100) * (circleSize - 80) + 40} y2={(20/100) * (circleSize - 80) + 40} />
-          <line x1={(75/100) * (circleSize - 80) + 40} y1={(20/100) * (circleSize - 80) + 40} 
-                x2={(88/100) * (circleSize - 80) + 40} y2={(35/100) * (circleSize - 80) + 40} />
-          <line x1={(92/100) * (circleSize - 80) + 40} y1={(55/100) * (circleSize - 80) + 40} 
-                x2={(88/100) * (circleSize - 80) + 40} y2={(75/100) * (circleSize - 80) + 40} />
-          <line x1={(35/100) * (circleSize - 80) + 40} y1={(88/100) * (circleSize - 80) + 40} 
-                x2={(20/100) * (circleSize - 80) + 40} y2={(75/100) * (circleSize - 80) + 40} />
-          <line x1={(18/100) * (circleSize - 80) + 40} y1={(35/100) * (circleSize - 80) + 40} 
-                x2={(28/100) * (circleSize - 80) + 40} y2={(20/100) * (circleSize - 80) + 40} />
+          {connections.map((connection, index) => {
+            const fromStar = stars[connection.from]
+            const toStar = stars[connection.to]
+            if (!fromStar || !toStar) return null
+            
+            const x1 = (fromStar.x / 100) * (circleSize - 80) + 40
+            const y1 = (fromStar.y / 100) * (circleSize - 80) + 40
+            const x2 = (toStar.x / 100) * (circleSize - 80) + 40
+            const y2 = (toStar.y / 100) * (circleSize - 80) + 40
+            
+            return (
+              <line
+                key={index}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+              />
+            )
+          })}
         </g>
         
         {/* Stars */}
-        {starData.map((star, index) => {
+        {stars.map((star, index) => {
           const x = (star.x / 100) * (circleSize - 80) + 40
           const y = (star.y / 100) * (circleSize - 80) + 40
           const size = star.size === 'large' ? 6 : star.size === 'medium' ? 4 : star.size === 'small' ? 2.5 : 1.5
@@ -202,7 +433,7 @@ function Constellation() {
                 cx={x}
                 cy={y}
                 r={size}
-                fill="white"
+                fill={star.color || "white"}
                 className="drop-shadow-sm"
               />
             </g>
@@ -210,7 +441,7 @@ function Constellation() {
         })}
         
         {/* Roman numerals */}
-        {starData.filter(star => star.roman).map((star, index) => {
+        {stars.filter(star => star.roman).map((star, index) => {
           const x = (star.x / 100) * (circleSize - 80) + 40
           const y = (star.y / 100) * (circleSize - 80) + 40
           
@@ -254,6 +485,65 @@ function Constellation() {
           </textPath>
         </text>
       </svg>
+    </div>
+  )
+}
+
+function ResultsView({ nightSky, onReset }: {
+  nightSky: NightSkyData
+  onReset: () => void
+}) {
+  return (
+    <div>
+      {/* Header with title and reset button */}
+      <div className="text-center mb-8 md:mb-12">
+        <h1 className="text-3xl md:text-5xl lg:text-6xl font-serif mb-2 tracking-wide">
+          Night Sky Poetry
+        </h1>
+        <p className="text-base md:text-lg lg:text-xl font-serif italic text-gray-300 mb-6">
+          Your text transformed into constellations
+        </p>
+        <button
+          onClick={onReset}
+          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-blue-950"
+        >
+          Create New
+        </button>
+      </div>
+
+      {/* Single Night Sky with all constellations */}
+      <div className="text-center mb-12">
+        <div className="flex justify-center mb-8">
+          <NightSky data={nightSky} size="large" />
+        </div>
+        
+        {/* Curved text around circle */}
+        <p className="text-sm text-gray-400 mb-8">
+          {nightSky.paragraphs.length} constellation{nightSky.paragraphs.length !== 1 ? 's' : ''} from your text
+        </p>
+      </div>
+
+      {/* Legend */}
+      <Legend />
+
+      {/* Original paragraphs */}
+      <div className="mt-16">
+        <h2 className="text-xl md:text-2xl font-serif mb-8 text-center text-gray-300">
+          Source Text
+        </h2>
+        <div className="space-y-6 max-w-4xl mx-auto">
+          {nightSky.paragraphs.map((paragraph, index) => (
+            <div key={index} className="text-center">
+              <h3 className="text-lg font-serif mb-3 text-gray-400">
+                Paragraph {index + 1}
+              </h3>
+              <p className="text-sm md:text-base text-gray-300 leading-relaxed text-justify">
+                {paragraph}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -332,36 +622,76 @@ function Legend() {
   )
 }
 
+// Types for constellation data
+type Star = {
+  x: number
+  y: number
+  size: 'large' | 'medium' | 'small' | 'tiny'
+  roman?: string
+  paragraphIndex?: number
+  color?: string
+}
+
+type Connection = {
+  from: number
+  to: number
+  paragraphIndex?: number
+}
+
+type NightSkyData = {
+  stars: Star[]
+  connections: Connection[]
+  paragraphs: string[]
+}
+
+type ViewState = 'input' | 'generating' | 'results'
+
 function App() {
+  const [viewState, setViewState] = useState<ViewState>('input')
+  const [inputText, setInputText] = useState('')
+  const [nightSky, setNightSky] = useState<NightSkyData | null>(null)
+
+  const handleGenerate = async () => {
+    if (!inputText.trim()) return
+    
+    setViewState('generating')
+    
+    // Simulate processing time
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    // Generate single night sky from text
+    const generatedNightSky = generateNightSkyFromText(inputText)
+    setNightSky(generatedNightSky)
+    setViewState('results')
+  }
+
+  const handleReset = () => {
+    setViewState('input')
+    setInputText('')
+    setNightSky(null)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-950 via-blue-900 to-blue-950 text-white overflow-x-auto">
       <div className="container mx-auto px-4 py-6 md:py-8 max-w-6xl">
-        {/* Title section */}
-        <div className="text-center mb-8 md:mb-12">
-          <h1 className="text-3xl md:text-5xl lg:text-6xl font-serif mb-2 tracking-wide">
-            A Little Princess
-          </h1>
-          <p className="text-base md:text-lg lg:text-xl font-serif italic text-gray-300">
-            by Frances Hodgson Burnett
-          </p>
-        </div>
+        {viewState === 'input' && (
+          <InputForm 
+            inputText={inputText}
+            setInputText={setInputText}
+            onGenerate={handleGenerate}
+          />
+        )}
         
-        {/* Constellation */}
-        <div className="flex justify-center mb-6 md:mb-8">
-          <Constellation />
-        </div>
+        {viewState === 'generating' && (
+          <GeneratingView />
+        )}
         
-        {/* Legend */}
-        <Legend />
-        
-        {/* Content text */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs leading-relaxed max-w-5xl mx-auto">
-          {textContent.map((text, index) => (
-            <div key={index} className="text-gray-300 text-justify">
-              {text}
-            </div>
-          ))}
-        </div>
+        {viewState === 'results' && nightSky && (
+          <ResultsView 
+            nightSky={nightSky}
+            onReset={handleReset}
+          />
+        )}
       </div>
     </div>
   )
