@@ -1,4 +1,47 @@
 import { useState, useMemo } from 'react'
+import nlp from 'compromise'
+
+// Parts of speech angle mapping (following Nicholas Rougeux's approach)
+const POS_ANGLES = {
+  Noun: 0,           // 0 degrees (top)
+  Verb: 45,          // 45 degrees
+  Adjective: 90,     // 90 degrees (right)
+  Adverb: 135,       // 135 degrees
+  Pronoun: 180,      // 180 degrees (bottom)
+  Preposition: 225,  // 225 degrees
+  Conjunction: 270,  // 270 degrees (left)
+  Determiner: 315,   // 315 degrees
+  Interjection: 30,  // 30 degrees
+  Unknown: 60        // 60 degrees
+} as const
+
+// Colors for each part of speech (based on the legend in the reference)
+const POS_COLORS = {
+  Noun: '#ffffff',           // White - most common
+  Verb: '#fbbf24',          // Yellow/Gold - action
+  Adjective: '#ef4444',     // Red - descriptive
+  Adverb: '#8b5cf6',        // Purple - modifying
+  Pronoun: '#10b981',       // Green - reference
+  Preposition: '#3b82f6',   // Blue - relationship
+  Conjunction: '#f59e0b',   // Orange - connection
+  Determiner: '#ec4899',    // Pink - specification
+  Interjection: '#6366f1',  // Indigo - emotion
+  Unknown: '#9ca3af'        // Gray - unclassified
+} as const
+
+// Star shapes for different POS (following the legend)
+const POS_SHAPES = {
+  Noun: 'circle',
+  Verb: 'star',
+  Adjective: 'star',
+  Adverb: 'star',
+  Pronoun: 'circle',
+  Preposition: 'star',
+  Conjunction: 'circle',
+  Determiner: 'star',
+  Interjection: 'circle',
+  Unknown: 'circle'
+} as const
 
 // Utility functions for constellation generation
 function generateNightSkyFromText(text: string): NightSkyData {
@@ -6,30 +49,21 @@ function generateNightSkyFromText(text: string): NightSkyData {
   
   const allStars: Star[] = []
   const allConnections: Connection[] = []
-  const colors = ['#ffffff', '#e0e7ff', '#fef3c7', '#fecaca', '#d1fae5', '#e0e7ff']
   
   paragraphs.forEach((paragraph, paragraphIndex) => {
-    const words = paragraph.split(/\s+/).filter(w => w.length > 0)
-    
     // Define area for this constellation within the circle
     const constellationArea = getConstellationArea(paragraphIndex, paragraphs.length)
     
-    // Generate stars for this constellation within its area
-    const constellationStars = generateStarsInArea(words, constellationArea, paragraphIndex, colors[paragraphIndex % colors.length])
-    
-    // Generate connections within this constellation
-    const constellationConnections = generateConnectionsForConstellation(
-      constellationStars,
-      allStars.length, // offset for global star indices
-      paragraphIndex
-    )
+    // Generate stars for this constellation using POS analysis
+    const { stars: constellationStars, connections: constellationConnections } = 
+      generateConstellationFromSentence(paragraph, constellationArea, paragraphIndex, allStars.length)
     
     allStars.push(...constellationStars)
     allConnections.push(...constellationConnections)
   })
   
   // Add some random decorative stars throughout the sky
-  const decorativeStars = generateDecorativeStars(paragraphs.length * 10)
+  const decorativeStars = generateDecorativeStars(paragraphs.length * 5)
   allStars.push(...decorativeStars)
   
   return {
@@ -37,6 +71,84 @@ function generateNightSkyFromText(text: string): NightSkyData {
     connections: allConnections,
     paragraphs: paragraphs.map(p => p.trim())
   }
+}
+
+function generateConstellationFromSentence(
+  sentence: string, 
+  area: {centerX: number, centerY: number, radius: number}, 
+  paragraphIndex: number,
+  globalStarOffset: number
+): { stars: Star[], connections: Connection[] } {
+  // Clean and analyze the sentence
+  const doc = nlp(sentence)
+  const words = doc.terms().out('array')
+  const terms = doc.terms()
+  
+  const stars: Star[] = []
+  const connections: Connection[] = []
+  
+  words.forEach((word, index) => {
+    if (word.trim().length === 0) return
+    
+    // Get POS tag using compromise
+    const term = terms.eq(index)
+    const pos = classifyPartOfSpeech(term)
+    
+    // Calculate position based on POS angle and word position in sentence
+    const posAngle = POS_ANGLES[pos] || POS_ANGLES.Unknown
+    const baseAngle = (posAngle + (index * 15)) * (Math.PI / 180) // Convert to radians, add slight offset per word
+    
+    // Distance from center based on word length and sentence position
+    const wordLength = word.length
+    const distance = Math.min(area.radius * 0.3, (wordLength * 3) + (index * 2))
+    
+    // Calculate position within the constellation area
+    const x = area.centerX + distance * Math.cos(baseAngle)
+    const y = area.centerY + distance * Math.sin(baseAngle)
+    
+    // Size based on word length (following Rougeux's approach)
+    let size: 'large' | 'medium' | 'small' | 'tiny'
+    if (wordLength > 8) size = 'large'
+    else if (wordLength > 5) size = 'medium'
+    else if (wordLength > 3) size = 'small'
+    else size = 'tiny'
+    
+    stars.push({
+      x: Math.max(5, Math.min(95, x)), // Keep within bounds
+      y: Math.max(5, Math.min(95, y)),
+      size,
+      color: POS_COLORS[pos] || POS_COLORS.Unknown,
+      paragraphIndex,
+      roman: index === 0 ? toRoman(paragraphIndex + 1) : undefined, // First word gets Roman numeral
+      partOfSpeech: pos,
+      shape: POS_SHAPES[pos] || 'circle',
+      word: word.toLowerCase().replace(/[^a-zA-Z]/g, '') // Store clean word for debugging
+    })
+    
+    // Connect adjacent words in the sentence (following text flow)
+    if (index > 0) {
+      connections.push({
+        from: globalStarOffset + index - 1,
+        to: globalStarOffset + index,
+        paragraphIndex
+      })
+    }
+  })
+  
+  return { stars, connections }
+}
+
+function classifyPartOfSpeech(term: any): keyof typeof POS_ANGLES {
+  if (term.has('#Noun')) return 'Noun'
+  if (term.has('#Verb')) return 'Verb'
+  if (term.has('#Adjective')) return 'Adjective'
+  if (term.has('#Adverb')) return 'Adverb'
+  if (term.has('#Pronoun')) return 'Pronoun'
+  if (term.has('#Preposition')) return 'Preposition'
+  if (term.has('#Conjunction')) return 'Conjunction'
+  if (term.has('#Determiner')) return 'Determiner'
+  if (term.has('#Interjection')) return 'Interjection'
+  return 'Unknown'
 }
 
 function getConstellationArea(index: number, total: number) {
@@ -64,70 +176,6 @@ function getConstellationArea(index: number, total: number) {
   }
 }
 
-function generateStarsInArea(words: string[], area: {centerX: number, centerY: number, radius: number}, paragraphIndex: number, color: string): Star[] {
-  const stars: Star[] = []
-  
-  words.forEach((word, index) => {
-    // Position stars within the allocated area
-    const angle = (index / words.length) * 2 * Math.PI + (Math.random() - 0.5) * 1
-    const radius = Math.random() * area.radius
-    
-    const x = area.centerX + radius * Math.cos(angle)
-    const y = area.centerY + radius * Math.sin(angle)
-    
-    // Size based on word length
-    let size: 'large' | 'medium' | 'small' | 'tiny'
-    if (word.length > 8) size = 'large'
-    else if (word.length > 5) size = 'medium'
-    else if (word.length > 3) size = 'small'
-    else size = 'tiny'
-    
-    stars.push({
-      x: Math.max(5, Math.min(95, x)), // Keep within bounds
-      y: Math.max(5, Math.min(95, y)),
-      size,
-      roman: index < 10 ? toRoman(index + 1) : undefined, // First 10 words get Roman numerals
-      paragraphIndex,
-      color
-    })
-  })
-  
-  return stars
-}
-
-function generateConnectionsForConstellation(stars: Star[], offset: number, paragraphIndex: number): Connection[] {
-  const connections: Connection[] = []
-  const maxConnections = Math.min(5, Math.floor(stars.length / 2))
-  
-  for (let i = 0; i < maxConnections; i++) {
-    const from = Math.floor(Math.random() * stars.length)
-    let to = Math.floor(Math.random() * stars.length)
-    
-    // Avoid self-connections and duplicates
-    while (to === from || connections.some(c => 
-      (c.from === from + offset && c.to === to + offset) || 
-      (c.from === to + offset && c.to === from + offset)
-    )) {
-      to = Math.floor(Math.random() * stars.length)
-    }
-    
-    // Only connect if stars are reasonably close
-    const distance = Math.sqrt(
-      Math.pow(stars[from].x - stars[to].x, 2) + 
-      Math.pow(stars[from].y - stars[to].y, 2)
-    )
-    
-    if (distance < 25) { // Reduced distance threshold for smaller areas
-      connections.push({ 
-        from: from + offset, 
-        to: to + offset,
-        paragraphIndex
-      })
-    }
-  }
-  
-  return connections
-}
 
 function generateDecorativeStars(count: number): Star[] {
   const stars: Star[] = []
@@ -157,6 +205,23 @@ function toRoman(num: number): string {
     }
   }
   return result
+}
+
+function createStarPoints(cx: number, cy: number, radius: number): string {
+  const points = []
+  const spikes = 5
+  const outerRadius = radius
+  const innerRadius = radius * 0.4
+  
+  for (let i = 0; i < spikes * 2; i++) {
+    const angle = (i * Math.PI) / spikes - Math.PI / 2
+    const r = i % 2 === 0 ? outerRadius : innerRadius
+    const x = cx + Math.cos(angle) * r
+    const y = cy + Math.sin(angle) * r
+    points.push(`${x},${y}`)
+  }
+  
+  return points.join(' ')
 }
 
 // Star data for constellation - positions in percentages relative to circle
@@ -429,13 +494,21 @@ function NightSky({ data, size = 'large' }: {
           
           return (
             <g key={index}>
-              <circle
-                cx={x}
-                cy={y}
-                r={size}
-                fill={star.color || "white"}
-                className="drop-shadow-sm"
-              />
+              {star.shape === 'star' ? (
+                <polygon
+                  points={createStarPoints(x, y, size)}
+                  fill={star.color || "white"}
+                  className="drop-shadow-sm"
+                />
+              ) : (
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={size}
+                  fill={star.color || "white"}
+                  className="drop-shadow-sm"
+                />
+              )}
             </g>
           )
         })}
@@ -481,7 +554,7 @@ function NightSky({ data, size = 'large' }: {
         </defs>
         <text className="text-xs fill-white font-light tracking-[0.15em] opacity-80">
           <textPath href="#circle-path" startOffset="25%">
-            CONSTELLATIONS of FIRST SENTENCES from EACH CHAPTER
+            CONSTELLATIONS of TEXT VISUALIZED by PARTS of SPEECH
           </textPath>
         </text>
       </svg>
@@ -557,37 +630,55 @@ function Legend() {
         <div className="space-y-2 text-xs">
           <div className="flex items-center gap-3">
             <svg width="16" height="16">
-              <polygon points="8,1 9.5,6 14,6 10.5,9 12,14 8,11 4,14 5.5,9 2,6 6.5,6" fill="white" />
+              <polygon points={createStarPoints(8, 8, 3)} fill="#fbbf24" />
             </svg>
-            <span className="font-light">Verb, Adverb, Adjective</span>
+            <span className="font-light">Verb</span>
           </div>
           <div className="flex items-center gap-3">
             <svg width="16" height="16">
-              <circle cx="8" cy="8" r="2.5" fill="white" />
+              <polygon points={createStarPoints(8, 8, 3)} fill="#8b5cf6" />
+            </svg>
+            <span className="font-light">Adverb</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <svg width="16" height="16">
+              <polygon points={createStarPoints(8, 8, 3)} fill="#ef4444" />
+            </svg>
+            <span className="font-light">Adjective</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <svg width="16" height="16">
+              <circle cx="8" cy="8" r="3" fill="#ffffff" />
+            </svg>
+            <span className="font-light">Noun</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <svg width="16" height="16">
+              <circle cx="8" cy="8" r="3" fill="#10b981" />
             </svg>
             <span className="font-light">Pronoun</span>
           </div>
           <div className="flex items-center gap-3">
             <svg width="16" height="16">
-              <polygon points="8,1 9.5,6 14,6 10.5,9 12,14 8,11 4,14 5.5,9 2,6 6.5,6" fill="white" />
+              <polygon points={createStarPoints(8, 8, 3)} fill="#3b82f6" />
             </svg>
             <span className="font-light">Preposition</span>
           </div>
           <div className="flex items-center gap-3">
             <svg width="16" height="16">
-              <circle cx="8" cy="8" r="1.8" fill="white" />
+              <circle cx="8" cy="8" r="3" fill="#f59e0b" />
             </svg>
-            <span className="font-light">Noun, Conjunction</span>
+            <span className="font-light">Conjunction</span>
           </div>
           <div className="flex items-center gap-3">
             <svg width="16" height="16">
-              <polygon points="8,1 9.5,6 14,6 10.5,9 12,14 8,11 4,14 5.5,9 2,6 6.5,6" fill="white" />
+              <polygon points={createStarPoints(8, 8, 3)} fill="#ec4899" />
             </svg>
             <span className="font-light">Determiner</span>
           </div>
           <div className="flex items-center gap-3">
             <svg width="16" height="16">
-              <circle cx="8" cy="8" r="1.2" fill="white" />
+              <circle cx="8" cy="8" r="3" fill="#6366f1" />
             </svg>
             <span className="font-light">Interjection</span>
           </div>
@@ -596,25 +687,31 @@ function Legend() {
       
       {/* Stars legend */}
       <div className="text-white">
-        <h3 className="text-sm font-light tracking-wider mb-4">STARS</h3>
+        <h3 className="text-sm font-light tracking-wider mb-4">WORD LENGTH</h3>
         <div className="space-y-3 text-xs">
           <div className="flex items-center gap-3">
             <svg width="16" height="16">
-              <polygon points="8,1 9.5,6 14,6 10.5,9 12,14 8,11 4,14 5.5,9 2,6 6.5,6" fill="white" />
+              <circle cx="8" cy="8" r="1.5" fill="white" />
             </svg>
-            <span className="font-light">First word</span>
+            <span className="font-light">1-3 letters (tiny)</span>
           </div>
           <div className="flex items-center gap-3">
             <svg width="16" height="16">
               <circle cx="8" cy="8" r="2.5" fill="white" />
             </svg>
-            <span className="font-light">Shorter word</span>
+            <span className="font-light">4-5 letters (small)</span>
           </div>
           <div className="flex items-center gap-3">
             <svg width="16" height="16">
               <circle cx="8" cy="8" r="4" fill="white" />
             </svg>
-            <span className="font-light">Longer word</span>
+            <span className="font-light">6-8 letters (medium)</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <svg width="16" height="16">
+              <circle cx="8" cy="8" r="6" fill="white" />
+            </svg>
+            <span className="font-light">9+ letters (large)</span>
           </div>
         </div>
       </div>
@@ -630,6 +727,9 @@ type Star = {
   roman?: string
   paragraphIndex?: number
   color?: string
+  partOfSpeech?: keyof typeof POS_ANGLES
+  shape?: 'circle' | 'star'
+  word?: string
 }
 
 type Connection = {
