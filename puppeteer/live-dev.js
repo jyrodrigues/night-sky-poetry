@@ -1,9 +1,9 @@
-const puppeteer = require('puppeteer');
-const fs = require('fs').promises;
-const path = require('path');
+import puppeteer from 'puppeteer';
+import fs from 'fs/promises';
+import path from 'path';
 
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
-const SCREENSHOT_DIR = '/app/screenshots';
+const SCREENSHOT_DIR = path.join(process.cwd(), 'screenshots');
 
 async function waitForApp(page, maxRetries = 30) {
   for (let i = 0; i < maxRetries; i++) {
