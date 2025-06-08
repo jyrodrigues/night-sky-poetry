@@ -1,1 +1,21 @@
 @import "tailwindcss";
+
+/* Enable GPU acceleration for constellation animations */
+.constellation-star,
+.constellation-text,
+.constellation-fade {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Optimize SVG rendering */
+svg {
+  shape-rendering: geometricPrecision;
+}
+
+/* Reduce repaints during animations */
+.constellation-star {
+  contain: layout style paint;
+}
