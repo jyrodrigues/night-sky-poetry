@@ -62,9 +62,7 @@ function generateNightSkyFromText(text: string): NightSkyData {
     allConnections.push(...constellationConnections)
   })
   
-  // Add some random decorative stars throughout the sky
-  const decorativeStars = generateDecorativeStars(paragraphs.length * 5)
-  allStars.push(...decorativeStars)
+  // Note: Removed decorative stars to keep background clean
   
   return {
     stars: allStars,
@@ -323,45 +321,25 @@ const starData = [
   { x: 48, y: 58, size: 'tiny' },
 ]
 
-const textContent = [
-  "I. Once on a dark winter's day, when the yellow fog hung so thick and heavy in the streets of London that the lamps were lighted and the shop windows blazed with gas as they do at night, an odd- looking little girl sat in a hansom cab with her father and was driven rather slowly through the big thoroughfares.",
-  
-  "II. When Sara entered the drawing room the next morning everybody looked at her with wide, interested eyes.",
-  
-  "III. One thing was plain, they did not know what to make of her or what to think, and Captain Crewe seemed to understand this perfectly; he saw the wonder in their faces, though they did not seem quite sure about her manners or her ways.", 
-  
-  "IV. If Sara had been a different kind of child, her life at Miss Minchin's Select Seminary for Young Ladies during the next few years would not have been at all good for her.",
-  
-  "V. Of course the greatest power Sara possessed and the one which gained her even more followers than the beauty, was the fact that she never, under any circumstances whatsoever, lost her temper.",
-  
-  "VI. When Sara first left France to go to Miss Minchin's school in London, she spoke French much better than she spoke English; it was her father's native tongue.",
-  
-  "VII. The first night she spent in her attic was a thing Sara never forgot.",
-  
-  "VIII. The next morning Becky was awakened by being gently shaken.",
-  
-  "IX. It was the third person in the trio who told her that her father was dead.",
-  
-  "X. After that it was a positive thing for Ermengarde and Lottie to make themselves at home in Sara's attic. It was the only place in which they felt they could speak with real freedom of their woes.",
-  
-  "XI. There were four more rooms over in the square sometimes.",
-  
-  "XII. When she first knew them from heaven, it is interesting to think of the things which set her being very different from different kinds of words that might be. What she always chiefly thought of the things which set her life very different she saw the large paper at the door into the little ones and caught a glimpse of what might be happening beyond them.",
-  
-  "XIII. If first night she spent in her attic was a thing Sara never forgot.",
-  
-  "XIV. On this very afternoon, there members of the Large Family sat in their nursery, which was on the second floor, discussing the remarkable the remarkable Miss Carmichael who explained her strange gift.",
-  
-  "XV. When Sara first passed the house three days she had seen four times the rooms were full and busy and of her mother one day. Here there were five more chairs arranged all about some great affairs. They all had to climb down stairs through the trees.",
-  
-  "XVI. Imagine if you can, what the rest of the evening was like.",
-  
-  "XVII. The next afternoon three members of the Large Family sat in their nursery, which was on the second floor, discussing the remarkable Miss Carmichael who explained that she also had a large old-fashioned home.",
-  
-  "XVIII. It was pretty uncomfortable, Miss Carmichael who explained that she also had to sit at her table and work.",
-  
-  "XIX. Never had such joy reigned in the nursery of the Large Family."
-]
+const defaultText = `Once on a dark winter's day, when the yellow fog hung so thick and heavy in the streets of London that the lamps were lighted and the shop windows blazed with gas as they do at night, an odd- looking little girl sat in a hansom cab with her father and was driven rather slowly through the big thoroughfares.
+
+When Sara entered the drawing room the next morning everybody looked at her with wide, interested eyes.
+
+One thing was plain, they did not know what to make of her or what to think, and Captain Crewe seemed to understand this perfectly; he saw the wonder in their faces, though they did not seem quite sure about her manners or her ways.
+
+If Sara had been a different kind of child, her life at Miss Minchin's Select Seminary for Young Ladies during the next few years would not have been at all good for her.
+
+Of course the greatest power Sara possessed and the one which gained her even more followers than the beauty, was the fact that she never, under any circumstances whatsoever, lost her temper.
+
+When Sara first left France to go to Miss Minchin's school in London, she spoke French much better than she spoke English; it was her father's native tongue.
+
+The first night she spent in her attic was a thing Sara never forgot.
+
+The next morning Becky was awakened by being gently shaken.
+
+It was the third person in the trio who told her that her father was dead.
+
+After that it was a positive thing for Ermengarde and Lottie to make themselves at home in Sara's attic. It was the only place in which they felt they could speak with real freedom of their woes.`
 
 function InputForm({ inputText, setInputText, onGenerate }: {
   inputText: string
@@ -415,13 +393,65 @@ function GeneratingView() {
   )
 }
 
-function NightSky({ data, size = 'large' }: { 
+function NightSky({ data, selectedParagraph, size = 'large' }: { 
   data?: NightSkyData
+  selectedParagraph?: number | null
   size?: 'small' | 'medium' | 'large' 
 }) {
-  // Use provided data or fallback to static data
-  const stars = data?.stars || starData
-  const connections = data?.connections || []
+  // Filter and transform data based on selected paragraph
+  const { stars, connections } = useMemo(() => {
+    const allStars = data?.stars || starData
+    const allConnections = data?.connections || []
+    
+    if (selectedParagraph === null || selectedParagraph === undefined) {
+      return { stars: allStars, connections: allConnections } // Show all
+    }
+    
+    // Filter stars and connections for selected paragraph
+    const filteredStars = allStars.filter(star => 
+      star.paragraphIndex === selectedParagraph
+    )
+    const filteredConnections = allConnections.filter(connection => 
+      connection.paragraphIndex === selectedParagraph
+    )
+    
+    // Calculate bounds of the selected constellation
+    const constellationStars = filteredStars.filter(star => star.paragraphIndex === selectedParagraph)
+    if (constellationStars.length === 0) {
+      return { stars: filteredStars, connections: filteredConnections }
+    }
+    
+    // Find the bounding box of the constellation
+    const minX = Math.min(...constellationStars.map(s => s.x))
+    const maxX = Math.max(...constellationStars.map(s => s.x))
+    const minY = Math.min(...constellationStars.map(s => s.y))
+    const maxY = Math.max(...constellationStars.map(s => s.y))
+    
+    // Calculate center and size of constellation
+    const centerX = (minX + maxX) / 2
+    const centerY = (minY + maxY) / 2
+    const width = maxX - minX
+    const height = maxY - minY
+    const constellationSize = Math.max(width, height)
+    
+    // Target size (60% of circle to leave more padding)
+    const targetSize = 60
+    const scale = constellationSize > 0 ? targetSize / constellationSize : 1
+    
+    // Transform stars to center and scale them
+    const transformedStars = filteredStars.map(star => {
+      // Scale and center constellation stars
+      const scaledX = (star.x - centerX) * scale + 50
+      const scaledY = (star.y - centerY) * scale + 50
+      return {
+        ...star,
+        x: Math.max(15, Math.min(85, scaledX)), // More padding from edges
+        y: Math.max(15, Math.min(85, scaledY))
+      }
+    })
+    
+    return { stars: transformedStars, connections: filteredConnections }
+  }, [data?.stars, data?.connections, selectedParagraph])
   
   const circleSize = useMemo(() => {
     // Responsive circle size based on screen size and size prop
@@ -481,6 +511,7 @@ function NightSky({ data, size = 'large' }: {
                 y1={y1}
                 x2={x2}
                 y2={y2}
+                className="transition-all duration-1000 ease-in-out"
               />
             )
           })}
@@ -498,7 +529,10 @@ function NightSky({ data, size = 'large' }: {
                 <polygon
                   points={createStarPoints(x, y, size)}
                   fill={star.color || "white"}
-                  className="drop-shadow-sm"
+                  className="drop-shadow-sm transition-all duration-1000 ease-in-out"
+                  style={{
+                    transformOrigin: `${x}px ${y}px`
+                  }}
                 />
               ) : (
                 <circle
@@ -506,7 +540,7 @@ function NightSky({ data, size = 'large' }: {
                   cy={y}
                   r={size}
                   fill={star.color || "white"}
-                  className="drop-shadow-sm"
+                  className="drop-shadow-sm transition-all duration-1000 ease-in-out"
                 />
               )}
             </g>
@@ -530,7 +564,7 @@ function NightSky({ data, size = 'large' }: {
               fill="white"
               fontSize="10"
               fontFamily="serif"
-              className="text-xs font-light"
+              className="text-xs font-light transition-all duration-1000 ease-in-out"
               textAnchor={star.x > 50 ? 'start' : 'end'}
             >
               {star.roman}
@@ -562,9 +596,11 @@ function NightSky({ data, size = 'large' }: {
   )
 }
 
-function ResultsView({ nightSky, onReset }: {
+function ResultsView({ nightSky, selectedParagraph, onReset, onParagraphClick }: {
   nightSky: NightSkyData
+  selectedParagraph: number | null
   onReset: () => void
+  onParagraphClick: (index: number) => void
 }) {
   return (
     <div>
@@ -587,12 +623,15 @@ function ResultsView({ nightSky, onReset }: {
       {/* Single Night Sky with all constellations */}
       <div className="text-center mb-12">
         <div className="flex justify-center mb-8">
-          <NightSky data={nightSky} size="large" />
+          <NightSky data={nightSky} selectedParagraph={selectedParagraph} size="large" />
         </div>
         
-        {/* Curved text around circle */}
+        {/* Status text */}
         <p className="text-sm text-gray-400 mb-8">
-          {nightSky.paragraphs.length} constellation{nightSky.paragraphs.length !== 1 ? 's' : ''} from your text
+          {selectedParagraph !== null 
+            ? `Showing constellation ${selectedParagraph + 1} of ${nightSky.paragraphs.length}`
+            : `${nightSky.paragraphs.length} constellation${nightSky.paragraphs.length !== 1 ? 's' : ''} from your text`
+          }
         </p>
       </div>
 
@@ -606,15 +645,36 @@ function ResultsView({ nightSky, onReset }: {
         </h2>
         <div className="space-y-6 max-w-4xl mx-auto">
           {nightSky.paragraphs.map((paragraph, index) => (
-            <div key={index} className="text-center">
-              <h3 className="text-lg font-serif mb-3 text-gray-400">
-                Paragraph {index + 1}
+            <div 
+              key={index} 
+              className={`text-center cursor-pointer transition-all duration-300 p-4 rounded-lg border ${
+                selectedParagraph === index 
+                  ? 'bg-blue-900 bg-opacity-30 border-blue-400 shadow-lg' 
+                  : selectedParagraph === null
+                    ? 'hover:bg-blue-900 hover:bg-opacity-20 border-transparent hover:border-blue-500'
+                    : 'opacity-50 border-transparent hover:opacity-70'
+              }`}
+              onClick={() => onParagraphClick(index)}
+            >
+              <h3 className={`text-lg font-serif mb-3 transition-colors ${
+                selectedParagraph === index 
+                  ? 'text-blue-300' 
+                  : 'text-gray-400 hover:text-gray-300'
+              }`}>
+                Paragraph {index + 1} {selectedParagraph === index && '(Selected)'}
               </h3>
               <p className="text-sm md:text-base text-gray-300 leading-relaxed text-justify">
                 {paragraph}
               </p>
             </div>
           ))}
+        </div>
+        
+        {/* Instructions */}
+        <div className="text-center mt-8">
+          <p className="text-xs text-gray-500">
+            Click on any paragraph above to isolate its constellation. Click again to show all constellations.
+          </p>
         </div>
       </div>
     </div>
@@ -748,8 +808,9 @@ type ViewState = 'input' | 'generating' | 'results'
 
 function App() {
   const [viewState, setViewState] = useState<ViewState>('input')
-  const [inputText, setInputText] = useState('')
+  const [inputText, setInputText] = useState(defaultText)
   const [nightSky, setNightSky] = useState<NightSkyData | null>(null)
+  const [selectedParagraph, setSelectedParagraph] = useState<number | null>(null)
 
   const handleGenerate = async () => {
     if (!inputText.trim()) return
@@ -767,8 +828,19 @@ function App() {
 
   const handleReset = () => {
     setViewState('input')
-    setInputText('')
+    setInputText(defaultText)
     setNightSky(null)
+    setSelectedParagraph(null)
+  }
+
+  const handleParagraphClick = (paragraphIndex: number) => {
+    if (selectedParagraph === paragraphIndex) {
+      // If clicking the already selected paragraph, show all
+      setSelectedParagraph(null)
+    } else {
+      // Otherwise, select this paragraph only
+      setSelectedParagraph(paragraphIndex)
+    }
   }
 
   return (
@@ -789,7 +861,9 @@ function App() {
         {viewState === 'results' && nightSky && (
           <ResultsView 
             nightSky={nightSky}
+            selectedParagraph={selectedParagraph}
             onReset={handleReset}
+            onParagraphClick={handleParagraphClick}
           />
         )}
       </div>
