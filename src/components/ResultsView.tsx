@@ -1,6 +1,97 @@
+import nlp from 'compromise'
 import type { NightSkyData } from '../types'
 import { NightSky } from './NightSky'
 import { Legend } from './Legend'
+import { classifyPartOfSpeech } from '../utils/nlp'
+import { POS_COLORS, POS_SHAPES } from '../constants'
+
+function GrammaticalBreakdown({ paragraph }: { paragraph: string }) {
+  // Analyze the paragraph using NLP
+  const doc = nlp(paragraph)
+  const words = doc.terms().out('array')
+  const terms = doc.terms()
+
+  const wordAnalysis = words.map((word, index) => {
+    if (word.trim().length === 0) return null
+    
+    const term = terms.eq(index)
+    const pos = classifyPartOfSpeech(term)
+    const color = POS_COLORS[pos]
+    const shape = POS_SHAPES[pos]
+    
+    return {
+      word: word.trim(),
+      pos,
+      color,
+      shape,
+      length: word.trim().length
+    }
+  }).filter(Boolean)
+
+  return (
+    <div className="mt-6 p-4 bg-gray-800 bg-opacity-30 rounded-lg border border-gray-600">
+      <h4 className="text-sm font-semibold text-gray-300 mb-4">Grammatical Breakdown:</h4>
+      <div className="space-y-2 max-h-48 overflow-y-auto">
+        {wordAnalysis.map((analysis, index) => (
+          <div key={index} className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {/* Visual representation */}
+              <div className="flex-shrink-0">
+                {analysis.shape === 'star' ? (
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon
+                      points="6,1 7.5,4.5 11,4.5 8.25,7 9.75,10.5 6,8.5 2.25,10.5 3.75,7 1,4.5 4.5,4.5"
+                      fill={analysis.color}
+                    />
+                  </svg>
+                ) : (
+                  <div 
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: analysis.color }}
+                  />
+                )}
+              </div>
+              
+              {/* Word info */}
+              <span className="font-mono text-white min-w-0 truncate">"{analysis.word}"</span>
+              <span className="text-gray-400">→</span>
+              <span 
+                className="font-semibold px-2 py-1 rounded text-xs"
+                style={{ 
+                  backgroundColor: `${analysis.color}20`,
+                  color: analysis.color,
+                  border: `1px solid ${analysis.color}40`
+                }}
+              >
+                {analysis.pos}
+              </span>
+            </div>
+            
+            {/* Additional info */}
+            <div className="flex items-center gap-2 text-gray-500 flex-shrink-0">
+              <span>{analysis.length} chars</span>
+              <span>•</span>
+              <span>{analysis.shape}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {/* Summary */}
+      <div className="mt-4 pt-3 border-t border-gray-600">
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="text-gray-400">Total words:</span>
+          <span className="text-white font-semibold">{wordAnalysis.length}</span>
+          <span className="text-gray-400">•</span>
+          <span className="text-gray-400">Path length:</span>
+          <span className="text-white font-semibold">
+            {wordAnalysis.reduce((sum, w) => sum + (w.length * 1.5), 0).toFixed(1)} units
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface ResultsViewProps {
   nightSky: NightSkyData
@@ -76,6 +167,11 @@ export function ResultsView({
               <p className="text-sm md:text-base text-gray-300 leading-relaxed text-justify">
                 {paragraph}
               </p>
+              
+              {/* Show grammatical breakdown only for selected paragraph */}
+              {selectedParagraph === index && (
+                <GrammaticalBreakdown paragraph={paragraph} />
+              )}
             </div>
           ))}
         </div>
