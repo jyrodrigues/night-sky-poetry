@@ -36,21 +36,8 @@ export type PartOfSpeech =
   | 'Pronoun'
   | 'Preposition'
   | 'Conjunction'
-  | 'Determiner'
   | 'Article'
-  | 'Modal'
-  | 'Auxiliary'
-  | 'Participle'
-  | 'Gerund'
-  | 'Possessive'
-  | 'Comparative'
-  | 'Superlative'
-  | 'Cardinal'
-  | 'Ordinal'
-  | 'Value'
-  | 'QuestionWord'
   | 'Interjection'
-  | 'Unknown'
 
 export interface ConstellationArea {
   centerX: number

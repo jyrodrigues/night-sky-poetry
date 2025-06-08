@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "screenshot": "mkdir -p screenshots && node puppeteer/live-dev.js"
+    "screenshot": "mkdir -p screenshots && node puppeteer/live-dev.js",
+    "test": "node test-9-categories.js && node test-final-9-categories.js && echo '✅ All tests completed'"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.8",

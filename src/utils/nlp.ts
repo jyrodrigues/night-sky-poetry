@@ -4,62 +4,58 @@ export function classifyPartOfSpeech(term: any): PartOfSpeech {
   // Get the actual text for specific word checking
   const text = term.text().toLowerCase().trim()
   
-  // Articles - commonly requested missing category
-  // Check for articles first since they're often tagged as determiners
+  // Articles - specific detection (the, a, an)
   if (text === 'the' || text === 'a' || text === 'an') {
     return 'Article'
   }
   
-  // Specific pronoun cases that might be misclassified
-  if (text === 'it' && term.has('#Pronoun')) {
-    return 'Pronoun'
+  // Interjections - emotional expressions (oh, wow, etc.)
+  if (term.has('#Interjection') || ['oh', 'wow', 'hey', 'ah', 'uh', 'hmm'].includes(text)) {
+    return 'Interjection'
   }
   
-  // Handle "that" - can be conjunction, determiner, or pronoun depending on context
-  // In "acknowledged that", it's typically a conjunction
-  if (text === 'that') {
-    // Context-based logic: if preceded by a verb, likely a conjunction
+  // Conjunctions - connecting words (and, but, or, that, because, etc.)
+  if (term.has('#Conjunction') || text === 'that' || ['and', 'but', 'or', 'so', 'because', 'although', 'while', 'if'].includes(text)) {
     return 'Conjunction'
   }
   
-  // Modal and auxiliary verbs - important subcategories of verbs
-  if (term.has('#Modal')) return 'Modal'
-  if (term.has('#Auxiliary')) return 'Auxiliary'
-  
-  // Participles and gerunds - important verb forms
-  if (term.has('#Participle')) return 'Participle'
-  if (term.has('#Gerund')) return 'Gerund'
-  
-  // Possessives - important for ownership relationships
-  if (term.has('#Possessive')) return 'Possessive'
-  
-  // Comparative and superlative forms - important adjective variants
-  if (term.has('#Superlative')) return 'Superlative'
-  if (term.has('#Comparative')) return 'Comparative'
-  
-  // Numbers and values - important for quantification
-  // Be more specific about ordinals to avoid false positives like "truth"
-  if (term.has('#Ordinal') || (['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'].includes(text))) {
-    return 'Ordinal'
+  // Prepositions - relationship words (in, on, at, of, to, etc.)
+  if (term.has('#Preposition')) {
+    return 'Preposition'
   }
-  if (term.has('#Cardinal')) return 'Cardinal'
-  if (term.has('#Value')) return 'Value'
   
-  // Question words - important for interrogative sentences
-  if (term.has('#QuestionWord')) return 'QuestionWord'
+  // Pronouns - replace nouns (I, you, he, she, it, they, etc.)
+  if (term.has('#Pronoun') || ['i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'].includes(text)) {
+    return 'Pronoun'
+  }
   
-  // Interjections - keep before other categories to ensure proper detection
-  if (term.has('#Interjection')) return 'Interjection'
+  // Adverbs - modify verbs, adjectives, other adverbs (quickly, very, etc.)
+  // Include comparative/superlative adverbs, modal adverbs, etc.
+  if (term.has('#Adverb') || text.endsWith('ly')) {
+    return 'Adverb'
+  }
   
-  // Main categories (order matters - more specific first)
-  if (term.has('#Pronoun')) return 'Pronoun'
-  if (term.has('#Conjunction')) return 'Conjunction'  
-  if (term.has('#Preposition')) return 'Preposition'
-  if (term.has('#Adverb')) return 'Adverb'
-  if (term.has('#Adjective')) return 'Adjective'
-  if (term.has('#Verb')) return 'Verb'
-  if (term.has('#Noun')) return 'Noun'
-  if (term.has('#Determiner')) return 'Determiner'
+  // Adjectives - describe nouns (big, red, beautiful, etc.)
+  // Include comparative/superlative forms, possessives used as adjectives
+  if (term.has('#Adjective') || term.has('#Comparative') || term.has('#Superlative') || 
+      text.endsWith('er') || text.endsWith('est')) {
+    return 'Adjective'
+  }
   
-  return 'Unknown'
+  // Verbs - action words (run, jump, is, have, etc.)
+  // Include all verb forms: modal, auxiliary, participles, gerunds
+  if (term.has('#Verb') || term.has('#Modal') || term.has('#Auxiliary') || 
+      term.has('#Participle') || term.has('#Gerund')) {
+    return 'Verb'
+  }
+  
+  // Nouns - people, places, things, ideas (including numbers, values, etc.)
+  // This includes proper nouns, possessives, numbers, determiners not already caught
+  if (term.has('#Noun') || term.has('#Cardinal') || term.has('#Ordinal') || 
+      term.has('#Value') || term.has('#Determiner') || term.has('#Possessive')) {
+    return 'Noun'
+  }
+  
+  // Default fallback - if we can't classify, treat as Noun (most common category)
+  return 'Noun'
 }
