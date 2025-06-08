@@ -393,32 +393,28 @@ function GeneratingView() {
   )
 }
 
-function NightSky({ data, selectedParagraph, size = 'large' }: { 
+function NightSky({ data, selectedParagraph, animationProgress = 0, size = 'large' }: { 
   data?: NightSkyData
   selectedParagraph?: number | null
+  animationProgress?: number
   size?: 'small' | 'medium' | 'large' 
 }) {
-  // Filter and transform data based on selected paragraph
+  // Transform data based on selected paragraph and animation progress
   const { stars, connections } = useMemo(() => {
     const allStars = data?.stars || starData
     const allConnections = data?.connections || []
     
     if (selectedParagraph === null || selectedParagraph === undefined) {
-      return { stars: allStars, connections: allConnections } // Show all
+      // Show all stars and connections with visible flag
+      const visibleStars = allStars.map(star => ({ ...star, visible: true }))
+      const visibleConnections = allConnections.map(connection => ({ ...connection, visible: true }))
+      return { stars: visibleStars, connections: visibleConnections }
     }
     
-    // Filter stars and connections for selected paragraph
-    const filteredStars = allStars.filter(star => 
-      star.paragraphIndex === selectedParagraph
-    )
-    const filteredConnections = allConnections.filter(connection => 
-      connection.paragraphIndex === selectedParagraph
-    )
-    
     // Calculate bounds of the selected constellation
-    const constellationStars = filteredStars.filter(star => star.paragraphIndex === selectedParagraph)
+    const constellationStars = allStars.filter(star => star.paragraphIndex === selectedParagraph)
     if (constellationStars.length === 0) {
-      return { stars: filteredStars, connections: filteredConnections }
+      return { stars: allStars, connections: allConnections }
     }
     
     // Find the bounding box of the constellation
@@ -438,20 +434,43 @@ function NightSky({ data, selectedParagraph, size = 'large' }: {
     const targetSize = 60
     const scale = constellationSize > 0 ? targetSize / constellationSize : 1
     
-    // Transform stars to center and scale them
-    const transformedStars = filteredStars.map(star => {
-      // Scale and center constellation stars
-      const scaledX = (star.x - centerX) * scale + 50
-      const scaledY = (star.y - centerY) * scale + 50
-      return {
-        ...star,
-        x: Math.max(15, Math.min(85, scaledX)), // More padding from edges
-        y: Math.max(15, Math.min(85, scaledY))
+    // Normalize animation progress (0-1)
+    const progress = Math.max(0, Math.min(1, animationProgress / 100))
+    
+    // Transform all stars based on animation progress
+    const transformedStars = allStars.map(star => {
+      if (star.paragraphIndex === selectedParagraph) {
+        // Calculate target position (scaled and centered)
+        const targetX = Math.max(15, Math.min(85, (star.x - centerX) * scale + 50))
+        const targetY = Math.max(15, Math.min(85, (star.y - centerY) * scale + 50))
+        
+        // Interpolate between original and target position based on progress
+        const currentX = star.x + (targetX - star.x) * progress
+        const currentY = star.y + (targetY - star.y) * progress
+        
+        return {
+          ...star,
+          x: currentX,
+          y: currentY,
+          visible: true
+        }
+      } else {
+        // Keep other stars in place but mark as invisible
+        return {
+          ...star,
+          visible: false
+        }
       }
     })
     
-    return { stars: transformedStars, connections: filteredConnections }
-  }, [data?.stars, data?.connections, selectedParagraph])
+    // Keep all connections but mark which ones should be visible
+    const transformedConnections = allConnections.map(connection => ({
+      ...connection,
+      visible: connection.paragraphIndex === selectedParagraph
+    }))
+    
+    return { stars: transformedStars, connections: transformedConnections }
+  }, [data?.stars, data?.connections, selectedParagraph, animationProgress])
   
   const circleSize = useMemo(() => {
     // Responsive circle size based on screen size and size prop
@@ -511,7 +530,9 @@ function NightSky({ data, selectedParagraph, size = 'large' }: {
                 y1={y1}
                 x2={x2}
                 y2={y2}
-                className="transition-all duration-1000 ease-in-out"
+                style={{
+                  opacity: connection.visible === false ? 0 : 1
+                }}
               />
             )
           })}
@@ -529,9 +550,10 @@ function NightSky({ data, selectedParagraph, size = 'large' }: {
                 <polygon
                   points={createStarPoints(x, y, size)}
                   fill={star.color || "white"}
-                  className="drop-shadow-sm transition-all duration-1000 ease-in-out"
+                  className="drop-shadow-sm"
                   style={{
-                    transformOrigin: `${x}px ${y}px`
+                    transformOrigin: `${x}px ${y}px`,
+                    opacity: star.visible === false ? 0 : 1
                   }}
                 />
               ) : (
@@ -540,7 +562,10 @@ function NightSky({ data, selectedParagraph, size = 'large' }: {
                   cy={y}
                   r={size}
                   fill={star.color || "white"}
-                  className="drop-shadow-sm transition-all duration-1000 ease-in-out"
+                  className="drop-shadow-sm"
+                  style={{
+                    opacity: star.visible === false ? 0 : 1
+                  }}
                 />
               )}
             </g>
@@ -564,8 +589,11 @@ function NightSky({ data, selectedParagraph, size = 'large' }: {
               fill="white"
               fontSize="10"
               fontFamily="serif"
-              className="text-xs font-light transition-all duration-1000 ease-in-out"
+              className="text-xs font-light"
               textAnchor={star.x > 50 ? 'start' : 'end'}
+              style={{
+                opacity: star.visible === false ? 0 : 1
+              }}
             >
               {star.roman}
             </text>
@@ -596,11 +624,13 @@ function NightSky({ data, selectedParagraph, size = 'large' }: {
   )
 }
 
-function ResultsView({ nightSky, selectedParagraph, onReset, onParagraphClick }: {
+function ResultsView({ nightSky, selectedParagraph, animationProgress, onReset, onParagraphClick, onAnimationProgressChange }: {
   nightSky: NightSkyData
   selectedParagraph: number | null
+  animationProgress: number
   onReset: () => void
   onParagraphClick: (index: number) => void
+  onAnimationProgressChange: (progress: number) => void
 }) {
   return (
     <div>
@@ -623,13 +653,38 @@ function ResultsView({ nightSky, selectedParagraph, onReset, onParagraphClick }:
       {/* Single Night Sky with all constellations */}
       <div className="text-center mb-12">
         <div className="flex justify-center mb-8">
-          <NightSky data={nightSky} selectedParagraph={selectedParagraph} size="large" />
+          <NightSky data={nightSky} selectedParagraph={selectedParagraph} animationProgress={animationProgress} size="large" />
         </div>
+        
+        {/* Animation slider - only show when a paragraph is selected */}
+        {selectedParagraph !== null && (
+          <div className="mb-6 max-w-md mx-auto">
+            <label className="block text-sm text-gray-400 mb-2">
+              Animation Progress: {animationProgress}%
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={animationProgress}
+              onChange={(e) => onAnimationProgressChange(Number(e.target.value))}
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${animationProgress}%, #374151 ${animationProgress}%, #374151 100%)`,
+                outline: 'none'
+              }}
+            />
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>Original</span>
+              <span>Zoomed</span>
+            </div>
+          </div>
+        )}
         
         {/* Status text */}
         <p className="text-sm text-gray-400 mb-8">
           {selectedParagraph !== null 
-            ? `Showing constellation ${selectedParagraph + 1} of ${nightSky.paragraphs.length}`
+            ? `Showing constellation ${selectedParagraph + 1} of ${nightSky.paragraphs.length} - Use slider to control zoom`
             : `${nightSky.paragraphs.length} constellation${nightSky.paragraphs.length !== 1 ? 's' : ''} from your text`
           }
         </p>
@@ -790,12 +845,14 @@ type Star = {
   partOfSpeech?: keyof typeof POS_ANGLES
   shape?: 'circle' | 'star'
   word?: string
+  visible?: boolean
 }
 
 type Connection = {
   from: number
   to: number
   paragraphIndex?: number
+  visible?: boolean
 }
 
 type NightSkyData = {
@@ -811,6 +868,7 @@ function App() {
   const [inputText, setInputText] = useState(defaultText)
   const [nightSky, setNightSky] = useState<NightSkyData | null>(null)
   const [selectedParagraph, setSelectedParagraph] = useState<number | null>(null)
+  const [animationProgress, setAnimationProgress] = useState(0) // 0-100
 
   const handleGenerate = async () => {
     if (!inputText.trim()) return
@@ -831,15 +889,18 @@ function App() {
     setInputText(defaultText)
     setNightSky(null)
     setSelectedParagraph(null)
+    setAnimationProgress(0)
   }
 
   const handleParagraphClick = (paragraphIndex: number) => {
     if (selectedParagraph === paragraphIndex) {
       // If clicking the already selected paragraph, show all
       setSelectedParagraph(null)
+      setAnimationProgress(0)
     } else {
       // Otherwise, select this paragraph only
       setSelectedParagraph(paragraphIndex)
+      setAnimationProgress(0) // Reset animation when selecting new paragraph
     }
   }
 
@@ -862,8 +923,10 @@ function App() {
           <ResultsView 
             nightSky={nightSky}
             selectedParagraph={selectedParagraph}
+            animationProgress={animationProgress}
             onReset={handleReset}
             onParagraphClick={handleParagraphClick}
+            onAnimationProgressChange={setAnimationProgress}
           />
         )}
       </div>
